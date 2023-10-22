@@ -23,7 +23,7 @@ class TimeTrackerPlugin(PluginClass):
 def write_item_to_tracking_file(line_text):
 	print(line_text)
 	tracking_file = open(os.path.join(Path.home(), "zim_time_tracker.txt"), "a+")
-	tracking_file.write(f"::{str(datetime.now())}:: {line_text}\n")
+	tracking_file.write(f"::{datetime.now().isoformat(timespec='seconds', sep=' ')}:: {line_text}\n")
 	tracking_file.flush()
 
 
