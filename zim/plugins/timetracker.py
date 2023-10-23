@@ -4,6 +4,7 @@ from zim.plugins.tasklist import TaskListNotebookViewExtension
 from pathlib import Path
 import os
 from datetime import datetime
+from html.parser import HTMLParser
 
 import logging
 
@@ -19,17 +20,31 @@ class TimeTrackerPlugin(PluginClass):
 		'help': 'Plugins:Time Tracker',
 	}
 
+class StripHTML(HTMLParser):
+	def __init__(self, *, convert_charrefs=True):
+		super().__init__(convert_charrefs=convert_charrefs)
+		self._raw_data = ""
+
+	def handle_data(self, data: str) -> None:
+		self._raw_data += data
+
+	@property
+	def raw_data(self):
+		return self._raw_data
 
 def write_item_to_tracking_file(line_text):
-	print(line_text)
+	striper = StripHTML()
+	striper.feed(line_text)
+
 	tracking_file = open(os.path.join(Path.home(), "zim_time_tracker.txt"), "a+")
-	tracking_file.write(f"::{datetime.now().isoformat(timespec='seconds', sep=' ')}:: {line_text}\n")
+	tracking_file.write(f"::{datetime.now().isoformat(timespec='seconds', sep=' ')}:: {striper.raw_data}\n")
 	tracking_file.flush()
 
 
 def on_todo_item_selected(treeview, path, _):
 	model = treeview.get_model()
 	write_item_to_tracking_file(model[path][DESC_COL])
+
 
 
 class TimeTrackerTaskListWindowExtension(TaskListWindowExtension):
