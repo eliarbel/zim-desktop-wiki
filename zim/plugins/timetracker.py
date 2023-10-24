@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 from datetime import datetime
 from html.parser import HTMLParser
+import atexit
 
 import logging
 
@@ -19,6 +20,7 @@ class TimeTrackerPlugin(PluginClass):
 		'author': 'Eli Arbel <eliarbel@gmail.com>',
 		'help': 'Plugins:Time Tracker',
 	}
+
 
 class StripHTML(HTMLParser):
 	def __init__(self, *, convert_charrefs=True):
@@ -45,20 +47,17 @@ def on_todo_item_selected(treeview, path, _):
 	model = treeview.get_model()
 	write_item_to_tracking_file(model[path][DESC_COL])
 
+def on_exit():
+	write_item_to_tracking_file("__________END_SESSION___________")
 
 
 class TimeTrackerTaskListWindowExtension(TaskListWindowExtension):
 	def __init__(self, _, window):
 		window.tasklisttreeview.connect("row-activated", on_todo_item_selected)
-		window.connect("hide", self.__class__.on_hide)
-
-	@staticmethod
-	def on_hide(windows, *a):
-		write_item_to_tracking_file("__________CLOSING_TASKLIST_WINDOW___________")
 
 
 class TimeTrackerTaskListWidgetExtension(TaskListNotebookViewExtension):
 	def __init__(self, plugin, pageview):
 		ext = find_extension(pageview, TaskListNotebookViewExtension)
 		ext._widget.tasklisttreeview.connect("row-activated", on_todo_item_selected)
-
+		atexit.register(on_exit)
