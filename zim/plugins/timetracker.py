@@ -52,6 +52,9 @@ def end_session():
 def on_exit():
 	end_session()
 
+def po_toggled(b):
+	if not b.get_active(): # Meaning it's was toggled
+		end_session()
 
 class TimeTrackerTaskListWindowExtension(TaskListWindowExtension):
 	def __init__(self, _, window):
@@ -65,9 +68,11 @@ class TimeTrackerTaskListWidgetExtension(TaskListNotebookViewExtension):
 		atexit.register(on_exit)
 
 		from gi.repository import Gtk
-		punchout = Gtk.Button()
+		punchout = Gtk.ToggleButton()
 		punchout.set_label("PO")
 		punchout.set_tooltip_text(_('Punch Out'))  # T: tooltip
 		punchout.set_alignment(0.5, 0.5)
-		punchout.connect("clicked", lambda o: end_session())
 		ext._widget._header_hbox.pack_start(punchout, False, True, 0)
+
+		ext._widget.tasklisttreeview.connect("row-activated", lambda a,b,y: punchout.set_active(True))
+		punchout.connect("toggled", po_toggled)
