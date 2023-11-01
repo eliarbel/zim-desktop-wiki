@@ -42,13 +42,15 @@ def write_item_to_tracking_file(line_text):
 	tracking_file.write(f"::{datetime.now().isoformat(timespec='seconds', sep=' ')}:: {striper.raw_data}\n")
 	tracking_file.flush()
 
-
 def on_todo_item_selected(treeview, path, _):
 	model = treeview.get_model()
 	write_item_to_tracking_file(model[path][DESC_COL])
 
-def on_exit():
+def end_session():
 	write_item_to_tracking_file("__________END_SESSION___________")
+
+def on_exit():
+	end_session()
 
 
 class TimeTrackerTaskListWindowExtension(TaskListWindowExtension):
@@ -61,3 +63,11 @@ class TimeTrackerTaskListWidgetExtension(TaskListNotebookViewExtension):
 		ext = find_extension(pageview, TaskListNotebookViewExtension)
 		ext._widget.tasklisttreeview.connect("row-activated", on_todo_item_selected)
 		atexit.register(on_exit)
+
+		from gi.repository import Gtk
+		punchout = Gtk.Button()
+		punchout.set_label("PO")
+		punchout.set_tooltip_text(_('Punch Out'))  # T: tooltip
+		punchout.set_alignment(0.5, 0.5)
+		punchout.connect("clicked", lambda o: end_session())
+		ext._widget._header_hbox.pack_start(punchout, False, True, 0)
