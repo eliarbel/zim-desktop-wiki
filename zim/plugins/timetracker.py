@@ -1,5 +1,5 @@
 from zim.plugins import PluginClass, find_extension
-from zim.plugins.tasklist.gui import TaskListWindowExtension, DESC_COL
+from zim.plugins.tasklist.gui import TaskListWindowExtension, DESC_COL, PAGE_COL
 from zim.plugins.tasklist import TaskListNotebookViewExtension
 from pathlib import Path
 import os
@@ -44,7 +44,7 @@ def write_item_to_tracking_file(line_text):
 
 def on_todo_item_selected(treeview, path, _):
 	model = treeview.get_model()
-	write_item_to_tracking_file(model[path][DESC_COL])
+	write_item_to_tracking_file(f"{model[path][DESC_COL]} :: {model[path][PAGE_COL]}")
 
 def end_session():
 	write_item_to_tracking_file("__________END_SESSION___________")
