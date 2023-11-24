@@ -96,12 +96,21 @@ class TimeTrackerReportWindow(Gtk.Window):
 		tree_model, total_tasks, total_duration = self._build_tree_model()
 		sorted_model = Gtk.TreeModelSort(tree_model)
 		sorted_model.set_sort_column_id(TimeTrackerReportWindow._COL_DURTATION_SECONDS,
-										Gtk.SortType.DESCENDING) # this will sort the table programatically
+										Gtk.SortType.DESCENDING) # this will sort the table programmatically
 
 		self._treeview.set_model(sorted_model)
 		self._bar.push(0, f"Total time: {total_duration}    Tasks: {total_tasks}")
 
 	def _initialize_layout(self):
+		box_range = Gtk.VBox()
+		box_range.pack_start(Gtk.Label(label="Range Presets:"), False, False, 0)
+		date_preset_box = Gtk.ComboBoxText()
+		for r in ["This Week", "Last Week", "Today", "Yesterday"]:
+			date_preset_box.append_text(r)
+
+		date_preset_box.connect("changed", self.on_date_preset_changed)
+		box_range.pack_start(date_preset_box, False, False, 3)
+
 		box = Gtk.HBox()
 		box.pack_start(Gtk.Button(label="Cal>"), False, False, 3)
 		self._from_date = Gtk.Entry()
@@ -124,6 +133,7 @@ class TimeTrackerReportWindow(Gtk.Window):
 		box_search.pack_start(self._searchentry, False, True, 3)
 
 		box_top_strip = Gtk.HBox()
+		box_top_strip.pack_start(box_range, False, True, 3)
 		box_top_strip.pack_start(box_from_date, False, True, 3)
 		box_top_strip.pack_start(box_to_date, False, True, 3)
 		refresh = Gtk.Button(label="Refresh")
@@ -153,6 +163,33 @@ class TimeTrackerReportWindow(Gtk.Window):
 
 		self.add(box_main_vbox)
 
+	def on_date_preset_changed(self, b):
+		def first_day_of_week(reference_day):
+			""" Returns the first day (Sunday) in the week of the reference day """
+			ic = reference_day.isocalendar()
+			return datetime.fromisocalendar(ic.year, ic.week, 1) - \
+				timedelta(days=1) # Using Sunday as the first day of the week
+
+		selection = b.get_active_text()
+		n = datetime.now()
+
+		if selection == "Today":
+			self._from_date.set_text(f"{n.day}/{n.month}/{n.year}")
+			self._to_date.set_text(f"{n.day}/{n.month}/{n.year}")
+		elif selection == "Yesterday":
+			n -=  timedelta(days=1)
+			self._from_date.set_text(f"{n.day}/{n.month}/{n.year}")
+			self._to_date.set_text(f"{n.day}/{n.month}/{n.year}")
+		elif selection in ["Last Week", "This Week"]:
+			if selection == "Last Week":
+				n -= timedelta(weeks=1)
+
+			n = first_day_of_week(n)
+			self._from_date.set_text(f"{n.day}/{n.month}/{n.year}")
+			n += timedelta(days=6)
+			self._to_date.set_text(f"{n.day}/{n.month}/{n.year}")
+
+
 	def _build_tree_model(self):
 		"""
 		Builds the tree model after filtering and including durations
@@ -179,6 +216,7 @@ class TimeTrackerReportWindow(Gtk.Window):
 			last_timestamp = None
 			total_tasks += len(task_times)
 			all_tags = set()
+			pages = set()
 
 			for task_time in task_times:
 				item_duration += task_time[3]
@@ -187,6 +225,8 @@ class TimeTrackerReportWindow(Gtk.Window):
 				tags = task_time[4] # this is a list
 				for t in tags:
 					all_tags.add(t)
+				page = task_time[2]
+				pages.add(page)
 
 				if first_timestamp is None or start_timestamp < first_timestamp:
 					first_timestamp = start_timestamp
@@ -198,7 +238,7 @@ class TimeTrackerReportWindow(Gtk.Window):
 											 str(task_time[3]),
 											 start_timestamp.strftime(TimeTrackerReportWindow._DATETIME_FORMAT),
 											 end_timestamp.strftime(TimeTrackerReportWindow._DATETIME_FORMAT),
-											 task_time[2],
+											 page,
 											 0 # not putting total seconds here (as in the parent item) to have the child
 											  # kept sorted by timestamp (which is the default order by consruction)
 											])
@@ -212,6 +252,7 @@ class TimeTrackerReportWindow(Gtk.Window):
 								 last_timestamp.strftime(TimeTrackerReportWindow._DATETIME_FORMAT))
 			tree_model.set_value(treeiter, TimeTrackerReportWindow._COL_DURTATION_SECONDS,
 								 item_duration.total_seconds())
+			tree_model.set_value(treeiter, TimeTrackerReportWindow._COL_PAGE_NAME, " ".join(pages))
 
 		return tree_model, total_tasks, total_task_duration
 
@@ -270,7 +311,7 @@ class TimeTrackerReportWindow(Gtk.Window):
 		for index, entry in enumerate(canonized_entries):
 			tags = []
 			tagless_task = re.sub(tag_re, lambda m: tags.append(m.group(0)), entry[1])
-			tagless_entries.append( (entry[0], tagless_task.strip(), entry[1], tags) )
+			tagless_entries.append( (entry[0], tagless_task.strip(), entry[2], tags) )
 
 		return tagless_entries
 
