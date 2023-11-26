@@ -167,7 +167,11 @@ class TimeTrackerReportWindow(Gtk.Window):
 	def on_date_preset_changed(self, b):
 		def first_day_of_week(reference_day):
 			""" Returns the first day (Sunday) in the week of the reference day """
+
 			ic = reference_day.isocalendar()
+			if ic.weekday == 7:
+				return reference_day
+
 			return datetime.fromisocalendar(ic.year, ic.week, 1) - \
 				timedelta(days=1) # Using Sunday as the first day of the week
 
