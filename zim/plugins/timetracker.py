@@ -39,10 +39,8 @@ def write_item_to_tracking_file(line_text):
 	striper = StripHTML()
 	striper.feed(line_text)
 
-	tracking_file = open(os.path.join(Path.home(), "zim_time_tracker.txt"), "a+", encoding="utf-8")
-	tracking_file.write(f"::{datetime.now().isoformat(timespec='seconds', sep=' ')}:: {striper.raw_data}\n")
-	print(striper.raw_data)
-	tracking_file.flush()
+	with open(os.path.join(Path.home(), "zim_time_tracker.txt"), "a+", encoding="utf-8") as tracking_file:
+		tracking_file.write(f"::{datetime.now().isoformat(timespec='seconds', sep=' ')}:: {striper.raw_data}\n")
 
 def on_todo_item_selected(treeview, path, _):
 	model = treeview.get_model()
@@ -91,9 +89,9 @@ class TimeTrackerReportWindow(Gtk.Window):
 		self._raw_entries = self._load_raw_data()
 		self._set_sort_columns()
 
-		self._show_report(None)
+		self._show_report()
 
-	def _show_report(self, button):
+	def _show_report(self, button=None):
 		tree_model, total_tasks, total_duration = self._build_tree_model()
 		sorted_model = Gtk.TreeModelSort(tree_model)
 		sorted_model.set_sort_column_id(TimeTrackerReportWindow._COL_DURTATION_SECONDS,
@@ -131,6 +129,7 @@ class TimeTrackerReportWindow(Gtk.Window):
 		box_search = Gtk.VBox()
 		box_search.pack_start(Gtk.Label(label="Filter:"), False, True, 0)
 		self._searchentry = Gtk.SearchEntry()
+		self._searchentry.connect("search-changed", self.on_search_entry_edited)
 		box_search.pack_start(self._searchentry, False, True, 3)
 
 		box_top_strip = Gtk.HBox()
@@ -139,7 +138,7 @@ class TimeTrackerReportWindow(Gtk.Window):
 		box_top_strip.pack_start(box_to_date, False, True, 3)
 		refresh = Gtk.Button(label="Refresh")
 		refresh.connect("clicked", self._show_report)
-		box_top_strip.pack_start(refresh, False, False, 3)
+		box_top_strip.pack_start(refresh, False, True, 3)
 		box_top_strip.pack_end(box_search, False, True, 3)
 
 		box_main_vbox = Gtk.VBox()
@@ -152,7 +151,13 @@ class TimeTrackerReportWindow(Gtk.Window):
 		self._treeview = Gtk.TreeView()
 		scrollable_treeview.add(self._treeview)
 
-		box_main_vbox.pack_start(scrollable_treeview, True, True, 0)
+		notebook = Gtk.Notebook()
+		notebook.append_page(scrollable_treeview, Gtk.Label(label="Aggregate Report"))
+		notebook.append_page(Gtk.Label(label="Place holder"), Gtk.Label(label="Day Report"))
+		notebook.append_page(Gtk.Label(label="Place holder"), Gtk.Label(label="Week Report"))
+		notebook.append_page(Gtk.Label(label="Place holder"), Gtk.Label(label="Log File"))
+		box_main_vbox.pack_start(notebook, True, True, 0)
+
 		for i, name in enumerate(TimeTrackerReportWindow._HEADER_NAMES):
 			renderer = Gtk.CellRendererText()
 			column = Gtk.TreeViewColumn(name, renderer, text=i, weight=1)
@@ -163,6 +168,9 @@ class TimeTrackerReportWindow(Gtk.Window):
 		box_main_vbox.pack_end(self._bar, False, False, 0)
 
 		self.add(box_main_vbox)
+
+	def on_search_entry_edited(self, widget):
+		self._show_report()
 
 	def on_date_preset_changed(self, b):
 		def first_day_of_week(reference_day):
@@ -193,6 +201,8 @@ class TimeTrackerReportWindow(Gtk.Window):
 			self._from_date.set_text(f"{n.day}/{n.month}/{n.year}")
 			n += timedelta(days=6)
 			self._to_date.set_text(f"{n.day}/{n.month}/{n.year}")
+
+		self._show_report()
 
 
 	def _build_tree_model(self):
@@ -281,9 +291,10 @@ class TimeTrackerReportWindow(Gtk.Window):
 
 		:returns: list of canonized entries
 		"""
-		tracking_file = open(os.path.join(Path.home(), "zim_time_tracker.txt"), "r", encoding="utf-8") #TODO: take the path from the plugin
+		# TODO: take the path from the plugin
+		with open(os.path.join(Path.home(), "zim_time_tracker.txt"), "r", encoding="utf-8") as tracking_file:
+			lines = tracking_file.readlines()
 
-		lines = tracking_file.readlines()
 		old_entry_re = re.compile("::(\d+-\d+-\d+ \d+:\d+:\d+):: (.*)$") # old format, before adding page name
 		new_entry_re = re.compile("::(\d+-\d+-\d+ \d+:\d+:\d+):: (.*) :: (.*)$")
 		date_format = '%Y-%m-%d %H:%M:%S'
