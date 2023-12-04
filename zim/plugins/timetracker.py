@@ -132,16 +132,16 @@ class TimeTrackerReportWindow(Gtk.Window):
 		box_search.pack_start(Gtk.Label(label="Filter:"), False, True, 0)
 		self._searchentry = Gtk.SearchEntry()
 		self._searchentry.connect("search-changed", self.on_search_entry_edited)
-		box_search.pack_start(self._searchentry, False, True, 3)
+		box_search.pack_start(self._searchentry, True, True, 3)
 
 		box_top_strip = Gtk.HBox()
 		box_top_strip.pack_start(box_range, False, True, 3)
 		box_top_strip.pack_start(box_from_date, False, True, 3)
 		box_top_strip.pack_start(box_to_date, False, True, 3)
-		refresh = Gtk.Button(label="Refresh")
-		refresh.connect("clicked", self._show_report)
-		box_top_strip.pack_start(refresh, False, True, 3)
-		box_top_strip.pack_end(box_search, False, True, 3)
+		clear_all = Gtk.Button(label="Clear All")
+		clear_all.connect("clicked", self.on_clear_all)
+		box_top_strip.pack_start(clear_all, False, True, 3)
+		box_top_strip.pack_end(box_search, True, True, 3)
 
 		box_main_vbox = Gtk.VBox()
 		box_main_vbox.pack_start(box_top_strip, False, False, 0)
@@ -175,6 +175,12 @@ class TimeTrackerReportWindow(Gtk.Window):
 		box_main_vbox.pack_end(self._bar, False, False, 0)
 
 		self.add(box_main_vbox)
+
+	def on_clear_all(self, button):
+		self._from_date.set_text("")
+		self._to_date.set_text("")
+		self._searchentry.set_text("")
+		self._show_report()
 
 	def on_search_entry_edited(self, widget):
 		self._show_report()
