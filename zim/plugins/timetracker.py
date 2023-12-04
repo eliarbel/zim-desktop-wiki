@@ -78,7 +78,9 @@ class TimeTrackerReportWindow(Gtk.Window):
 	_COL_START_TIME = 3
 	_COL_END_TIME = 4
 	_COL_PAGE_NAME = 5
-	_COL_DURTATION_SECONDS = 6
+	_COL_DURATION_SECONDS = 6 # Duration of the item (or total duration for all items if it's a parent item)
+	_COL_DURATION_BAR = 7 # percent (0-100) of duration out of total duration
+	_COL_DURATION_SORT = 8 # total duration to be used for sorting. Only parent items get non-zero values
 
 	def __init__(self):
 		super().__init__(title="Zim Time Tracker Report visualizer")
@@ -94,7 +96,7 @@ class TimeTrackerReportWindow(Gtk.Window):
 	def _show_report(self, button=None):
 		tree_model, total_tasks, total_duration = self._build_tree_model()
 		sorted_model = Gtk.TreeModelSort(tree_model)
-		sorted_model.set_sort_column_id(TimeTrackerReportWindow._COL_DURTATION_SECONDS,
+		sorted_model.set_sort_column_id(TimeTrackerReportWindow._COL_DURATION_SECONDS,
 										Gtk.SortType.DESCENDING) # this will sort the table programmatically
 
 		self._treeview.set_model(sorted_model)
@@ -158,9 +160,14 @@ class TimeTrackerReportWindow(Gtk.Window):
 		notebook.append_page(Gtk.Label(label="Place holder"), Gtk.Label(label="Log File"))
 		box_main_vbox.pack_start(notebook, True, True, 0)
 
+		# Setting up the treeview columns
 		for i, name in enumerate(TimeTrackerReportWindow._HEADER_NAMES):
-			renderer = Gtk.CellRendererText()
-			column = Gtk.TreeViewColumn(name, renderer, text=i, weight=1)
+			if i == TimeTrackerReportWindow._COL_DURATION:
+				column = Gtk.TreeViewColumn(name, Gtk.CellRendererProgress(),
+											value=TimeTrackerReportWindow._COL_DURATION_BAR,
+											text=i)
+			else:
+				column = Gtk.TreeViewColumn(name, Gtk.CellRendererText(), text=i, weight=1)
 			column.set_resizable(True)
 			self._treeview.append_column(column)
 
@@ -218,14 +225,16 @@ class TimeTrackerReportWindow(Gtk.Window):
 								   str, # start time
 								   str, # end time
 								   str, # page name
-								   float # duration as total seconds (for sorting)
+								   int, # duration as seconds
+								   int, # duration percent (for the progress bar)
+								   int # # duration as total seconds (for sorting)
 								   )
 
 		total_tasks = 0
 		total_task_duration = timedelta(0)
 
 		for task, task_times in filtered_tasks.items():
-			treeiter = tree_model.append(None, [task, "", "N/A", "N/A", "N/A", "", 0])
+			treeiter = tree_model.append(None, [task, "", "N/A", "N/A", "N/A", "", 0, 0, 0])
 			item_duration = timedelta(0)
 			first_timestamp = None
 			last_timestamp = None
@@ -254,8 +263,10 @@ class TimeTrackerReportWindow(Gtk.Window):
 											 start_timestamp.strftime(TimeTrackerReportWindow._DATETIME_FORMAT),
 											 end_timestamp.strftime(TimeTrackerReportWindow._DATETIME_FORMAT),
 											 page,
+											 task_time[3].total_seconds(),
+											 0,
 											 0 # not putting total seconds here (as in the parent item) to have the child
-											  # kept sorted by timestamp (which is the default order by consruction)
+											 # kept sorted by timestamp (which is the default order by consruction)
 											])
 
 			total_task_duration += item_duration
@@ -265,9 +276,16 @@ class TimeTrackerReportWindow(Gtk.Window):
 								 first_timestamp.strftime(TimeTrackerReportWindow._DATETIME_FORMAT))
 			tree_model.set_value(treeiter, TimeTrackerReportWindow._COL_END_TIME,
 								 last_timestamp.strftime(TimeTrackerReportWindow._DATETIME_FORMAT))
-			tree_model.set_value(treeiter, TimeTrackerReportWindow._COL_DURTATION_SECONDS,
+			tree_model.set_value(treeiter, TimeTrackerReportWindow._COL_DURATION_SECONDS,
 								 item_duration.total_seconds())
 			tree_model.set_value(treeiter, TimeTrackerReportWindow._COL_PAGE_NAME, " ".join(pages))
+
+		# Updating the progress bar cell values
+		def update_duration_bar(store, treepath, it):
+			task_duration = store[it][TimeTrackerReportWindow._COL_DURATION_SECONDS]
+			store[it][TimeTrackerReportWindow._COL_DURATION_BAR] = (task_duration / total_task_duration.total_seconds()) * 100
+			
+		tree_model.foreach(update_duration_bar)
 
 		return tree_model, total_tasks, total_task_duration
 
@@ -277,7 +295,7 @@ class TimeTrackerReportWindow(Gtk.Window):
 		:return:
 		"""
 		column = self._treeview.get_column(TimeTrackerReportWindow._COL_DURATION)
-		column.set_sort_column_id(TimeTrackerReportWindow._COL_DURTATION_SECONDS)
+		column.set_sort_column_id(TimeTrackerReportWindow._COL_DURATION_SECONDS)
 
 		column = self._treeview.get_column(TimeTrackerReportWindow._COL_TASK_NAME)
 		column.set_sort_column_id(TimeTrackerReportWindow._COL_TASK_NAME)
