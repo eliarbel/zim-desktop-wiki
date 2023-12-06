@@ -355,6 +355,32 @@ class TimeTrackerReportWindow(Gtk.Window):
 
 		return tagless_entries
 
+	def is_filtered(self, entry):
+		"""
+		Returns true is the given entry should be filtered based on the Search Entry
+		:param entry: An list containing the entry data (in the column format loaded from file)
+		:return: True iff entry should be filtered
+		"""
+		search_tokens = self._searchentry.get_text().split()
+		if not search_tokens:
+			return False
+
+		match = [False, False] # positive, negative
+		saw_positive = False
+
+		for token in search_tokens:
+			match_index = int(token[0] == '-')
+			if token[0] == '-':
+				token = token[1:]
+			token = token[1:] if token[0] == '-' else token
+			if not token:
+				continue
+
+			if token in entry[1] or token in " ".join(entry[3]):
+				match[match_index] = True
+
+		return match[1] or not match[0]
+
 	def _filter_raw_data(self, raw_entries):
 		"""
 		Filters the raw data based on the date and text filters. Puts the result into a dictionary of the form
@@ -386,10 +412,8 @@ class TimeTrackerReportWindow(Gtk.Window):
 			if entry_desc == end_session_str:
 				continue
 
-			search_text = self._searchentry.get_text()
-			if search_text:
-				if search_text not in entry_desc and search_text not in " ".join(raw_entries[i][3]): # tags
-					continue
+			if self.is_filtered(raw_entries[i]):
+				continue
 
 			start_time = raw_entries[i][0]
 			end_time = raw_entries[i+1][0]
