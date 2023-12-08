@@ -76,10 +76,16 @@ class TimeTrackerReportWindow(Gtk.Window):
 		self._raw_entries = self.load_raw_data() #TODO: rename to raw_data
 		self.update_filtered_data()
 
-		self.show_by_task_report()
+		# this will effectively show a report
+		self._notebook.connect("switch-page", self.on_notebook_page_change)
 
-	def show_by_task_report(self):
-		self._treeview.show_report(self._filtered_data, self._bar)
+	def show_report(self, page_num=None):
+		if page_num is None:
+			page_num = self._notebook.get_current_page()
+		if page_num <= 0:
+			self._by_task_treeview.show_report(self._filtered_data, self._bar)
+		elif page_num == 1:
+			self._by_tag_treeview.show_report(self._filtered_data, self._bar)
 
 	def update_filtered_data(self):
 		self._filtered_data = self.filter_raw_data(self._raw_entries)
@@ -131,32 +137,40 @@ class TimeTrackerReportWindow(Gtk.Window):
 		# setting up the layout, putting the treeview in a scrollwindow
 		scrollable_treeview = Gtk.ScrolledWindow()
 		scrollable_treeview.set_vexpand(True)
+		self._by_task_treeview = ByTaskTreeView()
+		scrollable_treeview.add(self._by_task_treeview)
 
-		self._treeview = ByTaskTreeView()
-		scrollable_treeview.add(self._treeview)
+		self._notebook = Gtk.Notebook()
+		self._notebook.append_page(scrollable_treeview, Gtk.Label(label="By Task"))
 
-		notebook = Gtk.Notebook()
-		notebook.append_page(scrollable_treeview, Gtk.Label(label="By Task"))
-		notebook.append_page(Gtk.Label(label="Place holder"), Gtk.Label(label="By Tag"))
-		notebook.append_page(Gtk.Label(label="Place holder"), Gtk.Label(label="By Day"))
-		notebook.append_page(Gtk.Label(label="Place holder"), Gtk.Label(label="Log File"))
-		box_main_vbox.pack_start(notebook, True, True, 0)
+		scrollable_treeview = Gtk.ScrolledWindow()
+		scrollable_treeview.set_vexpand(True)
+		self._by_tag_treeview = ByTagTreeView()
+		scrollable_treeview.add(self._by_tag_treeview)
+
+		self._notebook.append_page(scrollable_treeview, Gtk.Label(label="By Tag"))
+		self._notebook.append_page(Gtk.Label(label="Place holder2"), Gtk.Label(label="By Day"))
+		self._notebook.append_page(Gtk.Label(label="Place holder3"), Gtk.Label(label="Log File"))
+		box_main_vbox.pack_start(self._notebook, True, True, 0)
 
 		self._bar = Gtk.Statusbar()
 		box_main_vbox.pack_end(self._bar, False, False, 0)
 
 		self.add(box_main_vbox)
 
+	def on_notebook_page_change(self, page, data, page_num):
+		self.show_report(page_num)
+
 	def on_clear_all(self, button):
 		self._from_date.set_text("")
 		self._to_date.set_text("")
 		self._searchentry.set_text("")
 		self.update_filtered_data()
-		self.show_by_task_report()
+		self.show_report()
 
 	def on_search_entry_edited(self, widget):
 		self.update_filtered_data()
-		self.show_by_task_report()
+		self.show_report()
 
 	def on_date_preset_changed(self, b):
 		def first_day_of_week(reference_day):
@@ -189,7 +203,7 @@ class TimeTrackerReportWindow(Gtk.Window):
 			self._to_date.set_text(f"{n.day}/{n.month}/{n.year}")
 
 		self.update_filtered_data()
-		self.show_by_task_report()
+		self.show_report()
 
 	def load_raw_data(self):
 		"""
@@ -342,7 +356,7 @@ class ByTaskTreeView(Gtk.TreeView):
 		column = self.get_column(ByTaskTreeView._COL_TASK_NAME)
 		column.set_sort_column_id(ByTaskTreeView._COL_TASK_NAME)
 
-	def show_report(self, entries, statubar):
+	def show_report(self, entries, statusbar):
 		tree_model = Gtk.TreeStore(str,  # task name
 								   str,  # tags
 								   str,  # duration (as string)
@@ -420,7 +434,90 @@ class ByTaskTreeView(Gtk.TreeView):
 										Gtk.SortType.DESCENDING) # this will sort the table programmatically
 
 		self.set_model(sorted_model)
-		statubar.push(0, f"Total time: {total_task_durations}    Tasks: {total_tasks}")
+		statusbar.push(0, f"Total time: {total_task_durations}    Tasks: {total_tasks}")
+
+
+class ByTagTreeView(Gtk.TreeView):
+	# Class-level variables
+	_HEADER_NAMES = ["Task", "Duration"]
+	_COL_TASK_NAME = 0
+	_COL_DURATION = 1
+	_COL_DURATION_SECONDS = 2 # Duration of the item (or total duration for all items if it's a parent item)
+	_COL_DURATION_BAR = 3 # percent (0-100) of duration out of total duration
+
+	def __init__(self):
+		super().__init__()
+
+		# Setting up the treeview columns
+		for i, name in enumerate(ByTagTreeView._HEADER_NAMES):
+			if i == ByTagTreeView._COL_DURATION:
+				column = Gtk.TreeViewColumn(name, Gtk.CellRendererProgress(),
+											value=ByTagTreeView._COL_DURATION_BAR,
+											text=i)
+			else:
+				column = Gtk.TreeViewColumn(name, Gtk.CellRendererText(), text=i, weight=1)
+			column.set_resizable(True)
+			self.append_column(column)
+
+		# Sets on which columns sorting is supported
+		# TODO: add the rest of the columns
+		column = self.get_column(ByTagTreeView._COL_DURATION)
+		column.set_sort_column_id(ByTagTreeView._COL_DURATION_SECONDS)
+		column = self.get_column(ByTagTreeView._COL_TASK_NAME)
+		column.set_sort_column_id(ByTagTreeView._COL_TASK_NAME)
+
+	def show_report(self, entries, statusbar):
+		tree_model = Gtk.TreeStore(str,  # task name
+								   str,  # duration (as string)
+								   int,  # duration as seconds
+								   int  # duration percent (for the progress bar)
+								   )
+
+		model_dict = dict()
+		total_duration = timedelta(0)
+		for entry in entries:
+			start_timestamp = entry[0] # TODO: use enums instead of indices
+			end_timestamp = entry[1]
+			duration = end_timestamp - start_timestamp
+			total_duration += duration
+			desc = entry[2]
+			page = entry[3]
+			tags = entry[4]
+			if not tags:
+				tags.add("")
+
+			for tag in tags:
+				if tag not in model_dict:
+					model_dict[tag] = {"duration": duration,
+									   "tasks": {}}
+				else:
+					model_dict[tag]["duration"] += duration
+				tag_dict = model_dict[tag]
+				if desc not in tag_dict["tasks"]:
+					tag_dict["tasks"][desc] = duration
+				else:
+					tag_dict["tasks"][desc] += duration
+
+		for tag in model_dict:
+			duration = model_dict[tag]["duration"]
+
+			treeiter = tree_model.append(None, [tag, str(duration),
+												duration.total_seconds(),
+												duration.total_seconds() / total_duration.total_seconds() * 100])
+			tasks = model_dict[tag]["tasks"]
+			for task, duration in tasks.items():
+				tree_model.append(treeiter, [task, str(duration),
+											 duration.total_seconds(),
+											 duration.total_seconds() / total_duration.total_seconds() * 100])
+
+		sorted_model = Gtk.TreeModelSort(tree_model)
+		sorted_model.set_sort_column_id(ByTagTreeView._COL_DURATION_SECONDS,
+										Gtk.SortType.DESCENDING)  # this will sort the table programmatically
+
+		self.set_model(sorted_model)
+
+		statusbar.push(0, f"Total time: {total_duration}")
+
 
 class TimeTrackerTaskListWindowExtension(TaskListWindowExtension):
 	def __init__(self, _, window):
